@@ -46,6 +46,8 @@ class SCLIVisionBinary(_BaseSCLI):
         self.rule_total_weight: float = 0.0
         self.rule_train_accuracy: float | None = None
         self.rule_train_activation: float | None = None
+        self.rule_activation_reference: float = 1.0
+        self.rule_activation_p90: float = 1.0
 
     @staticmethod
     def _atom_mask(X: np.ndarray, atom: dict[str, Any]) -> np.ndarray:
@@ -314,13 +316,29 @@ class SCLIVisionBinary(_BaseSCLI):
             else:
                 neg_mass[m] += rule["weight"]
 
-        active = (pos_mass + neg_mass) > 0
+        total_mass = pos_mass + neg_mass
+        active = total_mass > 0
         pred = (pos_mass >= neg_mass).astype(np.int8)
 
         self.rule_train_activation = float(active.mean())
         self.rule_train_accuracy = float(
             np.mean(pred[active] == y[active])
         ) if active.any() else np.nan
+
+        if active.any():
+            active_mass = total_mass[active]
+            # Typical evidence mass, not total library mass, defines 1.0
+            # epistemic support. Median is robust to a few samples firing
+            # very many rules.
+            self.rule_activation_reference = float(
+                max(np.median(active_mass), 1e-6)
+            )
+            self.rule_activation_p90 = float(
+                max(np.percentile(active_mass, 90), 1e-6)
+            )
+        else:
+            self.rule_activation_reference = 1.0
+            self.rule_activation_p90 = 1.0
 
         return {
             "n_rules": int(len(self.rules)),
@@ -332,6 +350,12 @@ class SCLIVisionBinary(_BaseSCLI):
             ),
             "train_activation": float(self.rule_train_activation),
             "train_accuracy_when_activated": float(self.rule_train_accuracy),
+            "activation_reference_median": float(
+                self.rule_activation_reference
+            ),
+            "activation_reference_p90": float(
+                self.rule_activation_p90
+            ),
             "by_class": class_diags,
         }
 
@@ -449,17 +473,37 @@ class SCLIVisionBinary(_BaseSCLI):
         observable_rule_coverage = float(
             observable_rule_mass / (self.rule_total_weight + 1e-12)
         )
-        activation = float(
-            activated_rule_mass / (self.rule_total_weight + 1e-12)
+
+        # v9.1 evidence calibration:
+        # normalize active rule mass by the TYPICAL non-zero train activation,
+        # not by the entire rule library. Sparse high-precision conjunctions
+        # are supposed to activate only a small part of the library.
+        activation_strength = float(
+            min(
+                1.0,
+                activated_rule_mass
+                / (self.rule_activation_reference + 1e-12),
+            )
         )
-        # Epistemic coverage means class-relevant evidence actually fired,
-        # not merely that some rule inputs were measurable.
-        coverage = activation
+
+        # Conflicting OBJECT and CLEAR evidence is epistemically weak even if
+        # many rules fired. Agreement=1 for one-sided evidence, 0 for a tie.
+        if total_vote <= 1e-12:
+            agreement = 0.0
+        else:
+            agreement = float(
+                abs(pos_mass - neg_mass) / (total_vote + 1e-12)
+            )
+
+        activation = activation_strength
+        coverage = float(activation_strength * agreement)
 
         return {
             "score": score,
             "coverage": coverage,
             "rule_activation": activation,
+            "rule_agreement": agreement,
+            "activated_rule_mass": float(activated_rule_mass),
             "observable_rule_coverage": observable_rule_coverage,
             "noise_sigma": sigma,
             "n_observable": int(observable.sum()),
@@ -474,6 +518,8 @@ class SCLIVisionBinary(_BaseSCLI):
             "rule_count": int(len(self.rules)),
             "rule_train_activation": self.rule_train_activation,
             "rule_train_accuracy": self.rule_train_accuracy,
+            "rule_activation_reference": self.rule_activation_reference,
+            "rule_activation_p90": self.rule_activation_p90,
         })
         return d
 
