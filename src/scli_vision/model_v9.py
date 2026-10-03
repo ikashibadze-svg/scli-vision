@@ -384,6 +384,16 @@ class SCLIVisionBinary(_BaseSCLI):
         nsel = neg_values[:, self.selected]
         rule_diag = self._mine_rules(psel, nsel)
 
+        print(
+            "SCLI v9 conjunction rules: "
+            f"rules={rule_diag['n_rules']}, "
+            f"train_activation={rule_diag['train_activation']:.3f}, "
+            f"train_accuracy_when_activated="
+            f"{rule_diag['train_accuracy_when_activated']:.3f}, "
+            f"activation_reference="
+            f"{rule_diag['activation_reference_median']:.5f}"
+        )
+
         self.rule_source_mode = mode
         self.representation_mode = "contextual_conjunction_rules_v9"
         diag["source_mode"] = self.rule_source_mode
