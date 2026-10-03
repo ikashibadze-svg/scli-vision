@@ -25,3 +25,20 @@ conditions:
   - noise_08
   - occlusion_25
   - lowlight_combo
+
+# v6 robust gate calibration uses transformed VALIDATION images only.
+# This is not test leakage: the same declared corruption families are
+# applied to held-out validation instances to certify selective behavior.
+calibration_conditions:
+  - normal
+  - contrast_10
+  - contrast_03
+  - dark_15
+  - blur
+  - noise_08
+  - occlusion_25
+  - lowlight_combo
+
+# A regime is allowed to be ignored by certification only if the model
+# answers on less than this fraction of that regime.
+min_group_answer_rate: 0.02
