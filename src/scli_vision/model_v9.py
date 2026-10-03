@@ -42,6 +42,7 @@ class SCLIVisionBinary(_BaseSCLI):
         self.min_triple_precision = min_triple_precision
 
         self.rules: list[dict[str, Any]] = []
+        self.rule_source_mode: str | None = None
         self.rule_total_weight: float = 0.0
         self.rule_train_accuracy: float | None = None
         self.rule_train_activation: float | None = None
@@ -281,6 +282,18 @@ class SCLIVisionBinary(_BaseSCLI):
                 ),
             }
 
+        # Balance OBJECT and CLEAR rule families so rule count/support cannot
+        # create an implicit class prior.
+        for target in (0, 1):
+            mass = sum(
+                r["weight"] for r in all_rules
+                if r["target"] == target
+            )
+            if mass > 0:
+                for r in all_rules:
+                    if r["target"] == target:
+                        r["weight"] = float(r["weight"] / mass)
+
         self.rules = all_rules
         self.rule_total_weight = float(
             sum(r["weight"] for r in self.rules)
@@ -347,10 +360,27 @@ class SCLIVisionBinary(_BaseSCLI):
         nsel = neg_values[:, self.selected]
         rule_diag = self._mine_rules(psel, nsel)
 
+        self.rule_source_mode = mode
         self.representation_mode = "contextual_conjunction_rules_v9"
+        diag["source_mode"] = self.rule_source_mode
         diag["mode"] = self.representation_mode
         diag["rule_layer"] = rule_diag
         return diag
+
+    def _selected_observables(self, image: np.ndarray):
+        """Return the selected coordinates from the representation that
+        generated the v9 rules, even though public representation_mode is v9.
+        """
+        if self.rule_source_mode == "role_ratios_v4":
+            v, sup, coeff, _ = self._relational_observables(image)
+        else:
+            # ExDark contextual experiments arrive here.
+            v, sup, coeff, _ = self._structural_observables(image)
+        return (
+            v[self.selected],
+            sup[self.selected],
+            coeff[self.selected],
+        )
 
     @staticmethod
     def _atom_satisfied(value: float, atom: dict[str, Any]) -> bool:
@@ -416,17 +446,21 @@ class SCLIVisionBinary(_BaseSCLI):
         else:
             score = float(pos_mass / total_vote)
 
-        coverage = float(
+        observable_rule_coverage = float(
             observable_rule_mass / (self.rule_total_weight + 1e-12)
         )
         activation = float(
             activated_rule_mass / (self.rule_total_weight + 1e-12)
         )
+        # Epistemic coverage means class-relevant evidence actually fired,
+        # not merely that some rule inputs were measurable.
+        coverage = activation
 
         return {
             "score": score,
             "coverage": coverage,
             "rule_activation": activation,
+            "observable_rule_coverage": observable_rule_coverage,
             "noise_sigma": sigma,
             "n_observable": int(observable.sum()),
             "n_observable_rules": int(n_observable_rules),
