@@ -1,0 +1,7 @@
+path,label,split,source
+/path/to/positive_001.jpg,1,train,my_dataset
+/path/to/negative_001.jpg,0,train,my_dataset
+/path/to/positive_002.jpg,1,val,my_dataset
+/path/to/negative_002.jpg,0,val,my_dataset
+/path/to/positive_003.jpg,1,test,my_dataset
+/path/to/negative_003.jpg,0,test,my_dataset
