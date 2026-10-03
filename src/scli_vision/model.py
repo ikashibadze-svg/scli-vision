@@ -1,1 +1,3 @@
-from .model_v5 import Gate, SCLIVisionBinary\n\n__all__ = ["Gate", "SCLIVisionBinary"]\n
+from .model_v5 import Gate, SCLIVisionBinary
+
+__all__ = ["Gate", "SCLIVisionBinary"]
