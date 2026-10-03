@@ -739,7 +739,8 @@ class SCLIVisionBinary:
             expanded = True
 
         self.fit_diagnostics = {
-            "identity_observability_separated": True,\n            "aggregated_noise_propagation": True,
+            "identity_observability_separated": True,
+            "aggregated_noise_propagation": True,
             "initial_representation": relational_diag,
             "representation_expanded": expanded,
             "final_representation": final_diag,
