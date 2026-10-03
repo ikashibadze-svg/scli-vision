@@ -1,0 +1,27 @@
+seed: 20261003
+image_size: 64
+n_roles: 20
+min_role_spacing: 4
+patch_radius: 3
+
+# Natural objects are much more variable than the smoke benchmark.
+# Start at 0.60. The selected constraints are still ranked by
+# stability × positive/negative discrimination × reference magnitude.
+min_stability: 0.60
+
+max_constraints: 220
+obs_sigma_factor: 2.0
+obs_reference_fraction: 0.08
+
+target_known_accuracy: 0.90
+min_known_coverage: 0.05
+
+conditions:
+  - normal
+  - contrast_10
+  - contrast_03
+  - dark_15
+  - blur
+  - noise_08
+  - occlusion_25
+  - lowlight_combo

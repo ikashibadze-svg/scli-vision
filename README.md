@@ -1,132 +1,61 @@
-# SCLI-Vision: Observable Constraint Recognition
+# ExDark object-centered patch
 
-Research prototype for testing the principle:
+This patch changes the ExDark test from whole-image classification to object-centered
+classification using the official ExDark bounding boxes.
 
-> preserve/create identity-relevant distinctions; return `UNDERDETERMINED` when those distinctions are not observable.
+Why:
+- Whole ExDark images contain large, highly variable backgrounds.
+- SCLI role discovery averages positive images.
+- On full Cat images, role positions can be dominated by background/scene structure.
+- ExDark provides local bounding boxes, so object crops are the correct first test
+  of cross-instance relational identity.
 
-This repository is intentionally small and inspectable. It does **not** claim production autonomous-driving readiness.
-
-## Codespaces quick start
-
-If this is an existing repo, update it first:
-
-```bash
-git pull
-```
-
-For the ZIP provided with this project, upload/unzip it into a GitHub repository and open **Code → Codespaces → Create codespace**. The devcontainer installs the Python requirements automatically.
-
-Manual setup:
+## 1. Generate real object crops
 
 ```bash
-pip install -r requirements.txt
-export PYTHONPATH="$PWD/src"
-```
-
-## Fast smoke test
-
-This uses real face/non-face images bundled with scikit-image, so no dataset download is required:
-
-```bash
-export PYTHONPATH="$PWD/src"
-python scripts/smoke_test.py
-python scripts/run_experiment.py \
-  --manifest data/smoke/manifest.csv \
-  --output-dir outputs/smoke
-```
-
-You should get:
-
-```text
-outputs/smoke/
-├── accuracy.png
-├── safety_metrics.png
-├── results.csv
-├── details.csv
-├── false_clear_cases.csv
-├── resolved_manifest.csv
-└── run.json
-```
-
-## First real low-light experiment: ExDark Cat vs Rest
-
-Download ExDark outside the repo. See `PHOTO_SOURCES.md` and `data/README.md`.
-
-Create the manifest:
-
-```bash
-export PYTHONPATH="$PWD/src"
-python scripts/prepare_exdark.py \
-  --image-root /workspaces/data/ExDark/Dataset \
-  --image-class-list /workspaces/data/ExDark/Groundtruth/imageclasslist.txt \
+python scripts/prepare_exdark_crops.py \
+  --root data/external/ExDark/ExDark \
   --target-class Cat \
-  --output data/exdark_cat.csv
+  --output-root data/exdark_object_crops \
+  --manifest data/exdark_cat_crops.csv
 ```
 
-Run:
+## 2. Inspect counts
 
 ```bash
+python - <<'PY'
+import pandas as pd
+df=pd.read_csv("data/exdark_cat_crops.csv")
+print(df.groupby(["split","label"]).size())
+print(df.class_name.value_counts())
+PY
+```
+
+## 3. Run SCLI
+
+Use the memory-safe ExDark runner already in the repository:
+
+```bash
+export PYTHONPATH="$PWD/src"
+
 python scripts/run_experiment.py \
-  --manifest data/exdark_cat.csv \
-  --config configs/default.yaml \
-  --output-dir outputs/exdark_cat_v1
+  --manifest data/exdark_cat_crops.csv \
+  --config configs/exdark_crop.yaml \
+  --output-dir outputs/exdark_cat_crops_v1 \
+  --working-size 96 \
+  --negative-ratio 3 \
+  --max-val-per-class 500 \
+  --batch-size 64
 ```
 
-## What is being compared?
+If the model still reports no stable constraints, do NOT blindly keep lowering the
+threshold. First print the stability percentiles using the diagnostic snippet in
+`MODEL_DIAGNOSTIC.txt`. If the maximum stability is still close to 0.5, the current
+role representation is inadequate for cross-instance cat identity; that is a
+representation failure, not a parameter problem.
 
-### Baseline
-
-A conventional HOG + logistic-regression recognizer.
-
-### SCLI observable-constraint identity
-
-The current prototype:
-
-```text
-image
-  -> canonical structural frame
-  -> persistent latent roles (learned from positive examples)
-  -> pairwise relational constraints
-  -> raw-unit observability gate
-  -> identity score
-  -> KNOWN positive / KNOWN negative / UNDERDETERMINED
-```
-
-A constraint is only allowed to vote if its measured magnitude is larger than an estimated raw measurement-noise threshold. This prevents normalization from turning nearly pure noise into a fake invariant.
-
-## Metrics that matter
-
-`results.csv` reports:
-
-- `hog_accuracy`
-- `scli_raw_accuracy`
-- `known_coverage`
-- `known_accuracy`
-- `underdetermined_rate`
-- `false_clear_rate`
-- `false_alarm_rate`
-- `hog_false_clear_rate`
-
-For the Musk-style safety framing, the most important number is:
-
-```text
-false_clear_rate
-```
-
-A positive image that becomes `UNDERDETERMINED` is **not** counted as false-clear. The point of the epistemic gate is to prefer refusal/extra probing over declaring a weakly observed scene clear.
-
-## Recommended experiment order
-
-1. `smoke`: verify repo and plots.
-2. ExDark `Cat` vs rest: real low-light recognition.
-3. Your own matched grey-on-grey positive/negative set.
-4. BDD100K night images: road-driving domain.
-5. Video/temporal extension: flow/parallax as an added probe.
-6. Optional LLVIP visible-vs-infrared comparison: test measurement-mechanism substitution.
-
-## Important limitations
-
-- This is a research prototype, not a certified safety system.
-- A single photo cannot recover information that the sensor did not record.
-- The SCLI gate should return `UNDERDETERMINED` when identity-relevant distinctions are not observable.
-- For a real driving system, the next stage needs temporal frames, ego-motion and safety-action logic.
+Scientific note:
+This crop benchmark tests "Cat identity vs other annotated object identity".
+It is closer to object recognition than the whole-frame run, but it is not yet the
+full Robotaxi "object present vs empty road" safety experiment. That comes next by
+constructing positive object boxes and negative background/free-space patches.

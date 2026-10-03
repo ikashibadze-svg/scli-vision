@@ -1,0 +1,18 @@
+# Optional diagnostic snippet for src/scli_vision/model.py
+# Insert immediately before:
+#   eligible = np.where(stability >= self.min_stability)[0]
+#
+# print(
+#     "Constraint stability: "
+#     f"max={stability.max():.3f}, "
+#     f"p95={np.percentile(stability,95):.3f}, "
+#     f"p90={np.percentile(stability,90):.3f}, "
+#     f"median={np.median(stability):.3f}, "
+#     f"min_stability={self.min_stability:.3f}"
+# )
+# print(
+#     "Constraint discrimination: "
+#     f"max={discrimination.max():.3f}, "
+#     f"p95={np.percentile(discrimination,95):.3f}, "
+#     f"median={np.median(discrimination):.3f}"
+# )
